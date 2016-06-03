@@ -36,7 +36,7 @@ unsigned char MyMask[4] = { 255, 255, 255, 0 };
 unsigned char MyMAC[6];
 
 int8_t pingslot;
-uint8_t iptoping[4] = { 192, 168, 0, 2 };
+uint8_t iptoping[4] = { 169, 254, 44, 216 };
 
 void SetupPing()
 {
@@ -62,12 +62,42 @@ void DoPingCode()
 
 }
 
+void SendAnnounce( )
+{
+	const char * sending;
+
+	enc424j600_stopop();
+	enc424j600_startsend( 0 );
+	send_etherlink_header( 0x0800 );
+//	send_ip_header( 0, "\xE0\x00\x02\x3c", 17 ); //UDP Packet to 224.0.2.60
+	send_ip_header( 0, "\xa9\xfe\x2c\xd8", 17 ); //UDP Packet to 255.255.255.255
+
+	enc424j600_push16( 1222 );
+	enc424j600_push16( 3333 );
+	enc424j600_push16( 0 ); //length for later
+	enc424j600_push16( 0 ); //csum for later
+
+	enc424j600_pushpgmstr( PSTR( "[MOTD]\n" ) );
+
+	util_finish_udp_packet();
+}
+
+void HandleUDP( uint16_t len )
+{
+	POP16; //Checksum
+	len -= 8; //remove header.
+
+	//You could pop things, or check ports, etc. here.
+
+	return;
+}
+
 int main( void )
 {
 	uint8_t tick;
 
 	//Input the interrupt.
-	DDRD &= ~_BV(2);
+	// DDRD &= ~_BV(2);
 	cli();
 	setup_spi();
 	sendstr( "HELLO\n" );
@@ -89,7 +119,7 @@ int main( void )
 	sei();
 
 //	InitTCP();
-	DDRC &= 0;
+	// DDRD &= 0xff;
 	if( enc424j600_init( MyMAC ) )
 	{
 		sendstr( "Failure.\n" );
@@ -109,9 +139,10 @@ int main( void )
 			TIFR2 |= _BV(TOV2);
 			tick++;
 
-			if( tick == 2 )
+			if( tick == 255 )
 			{
-				DoPingCode();
+				// DoPingCode();
+				SendAnnounce();
 				tick = 0;
 			}
 		}

@@ -49,7 +49,7 @@
 #define MAX_FRAMELEN     578
 
 //Do this to disable printf's and save space
-//#define MUTE_PRINTF
+#define MUTE_PRINTF
 
 //UDP is pretty well tested.  It takes up ~350 bytes
 //If you use UDP, you will need to implement the following function:
@@ -57,7 +57,7 @@
 //you will have access to the global variables:
 //  localport, remoteport, and ipsource
 //
-//#define INCLUDE_UDP
+#define INCLUDE_UDP
 
 //TCP is still in alpha.  It is still a little buggy.  It takes up ~2200 bytes
 //You must call:
@@ -104,7 +104,8 @@
 
 
 //Scratchpad for sending out packets like UDP, ICMP, ARP, etc.
-#define TX_SCRATCHPAD_END  1024
+#define TX_SCRATCHES 3
+#define TX_SCRATCHPAD_END  (MAX_FRAMELEN * TX_SCRATCHES)
 
 #define RX_BUFFER_SIZE   (3264)
 #define RX_BUFFER_END    0x5FFF
