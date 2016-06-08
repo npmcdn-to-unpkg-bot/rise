@@ -6,7 +6,6 @@ SRCS = example.c  \
 	../ipcore/enc424j600.c \
 	../ipcore/iparpetc.c \
 	../ipcore/enc424j600_asm.S \
-	../ipcore/tcp.c \
 
 PROCESSOR=atmega328
 PROGRAMCODE=m328p
