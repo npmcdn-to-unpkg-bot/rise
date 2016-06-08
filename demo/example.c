@@ -30,12 +30,12 @@ unsigned char cc;
 #define PUSH(x) enc424j600_push8(x)
 #define PUSH16(x) enc424j600_push16(x)
 
-unsigned char MyIP[4] = { 192, 168, 0, 142 };
+unsigned char MyIP[4] = { 169, 254, 0, 144 };
 unsigned char MyMask[4] = { 255, 255, 255, 0 };
 unsigned char MyMAC[6];
 
 int8_t pingslot;
-uint8_t iptoping[4] = { 169, 254, 44, 216 };
+uint8_t iptoping[4] = { 169, 254, 0, 143 };
 
 void SetupPing()
 {
@@ -61,6 +61,8 @@ void DoPingCode()
 
 }
 
+char* packet = "[MOTD]\n";
+
 void SendAnnounce( )
 {
 	const char * sending;
@@ -69,14 +71,14 @@ void SendAnnounce( )
 	enc424j600_startsend( 0 );
 	send_etherlink_header( 0x0800 );
 //	send_ip_header( 0, "\xE0\x00\x02\x3c", 17 ); //UDP Packet to 224.0.2.60
-	send_ip_header( 0, "\xa9\xfe\x2c\xd8", 17 ); //UDP Packet to 255.255.255.255
+	send_ip_header( 0, iptoping, 17 ); //UDP Packet to 255.255.255.255
 
 	enc424j600_push16( 1222 );
 	enc424j600_push16( 3333 );
 	enc424j600_push16( 0 ); //length for later
 	enc424j600_push16( 0 ); //csum for later
 
-	enc424j600_pushpgmstr( PSTR( "[MOTD]\n" ) );
+	enc424j600_pushstr( packet );
 
 	util_finish_udp_packet();
 }
@@ -87,6 +89,17 @@ void HandleUDP( uint16_t len )
 	len -= 8; //remove header.
 
 	//You could pop things, or check ports, etc. here.
+	iptoping[0] = ipsource[0];
+	iptoping[1] = ipsource[1];
+	iptoping[2] = ipsource[2];
+	iptoping[3] = ipsource[3];
+
+	if (len > 0) {
+		packet[0] = POP;
+	}
+	if (len > 1) {
+		packet[1] = POP;
+	}
 
 	return;
 }
@@ -138,7 +151,7 @@ int main( void )
 			TIFR2 |= _BV(TOV2);
 			tick++;
 
-			if( tick == 255 )
+			if( tick == 100 )
 			{
 				// DoPingCode();
 				SendAnnounce();

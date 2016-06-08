@@ -25,12 +25,12 @@ program.elf : $(SRCS)
 program.hex : program.elf
 	avr-objcopy -j .text -j .data -O ihex program.elf program.hex 
 
-burn : program.hex
-	avrdude -c arduino -P /dev/tty.usbmodem1451 -p $(PROGRAMCODE) -V -U flash:w:program.hex 
+flash : program.hex
+	avrdude -c arduino -P /dev/tty.usbmodem14*1 -p $(PROGRAMCODE) -V -U flash:w:program.hex 
 #-V 	
 
 readfuses :
-	avrdude -c arduino -P /dev/tty.usbmodem1451 -p $(PROGRAMCODE) -U hfuse:r:high.txt:b -U lfuse:r:low.txt:b
+	avrdude -c arduino -P /dev/tty.usbmodem14*1 -p $(PROGRAMCODE) -U hfuse:r:high.txt:b -U lfuse:r:low.txt:b
 
 #careful here...
 #burnfuses :

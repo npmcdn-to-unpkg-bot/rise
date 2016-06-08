@@ -1,21 +1,10 @@
-avrcraft
-========
+# rise
 
-Minecraft server optimized for 8-bit devices.
+```
+nc -u 169.254.0.144 4111
+```
 
-Check out the AVR version of this in this video:
-http://www.youtube.com/watch?v=EZRLOanNQ_w
+Keep sending messages until you get a response.
 
-This has a few subprojects.
-* dumbcraft => Minimalistic Core C Minecraft Server
-+ demo_x86_dumbcraft => dumbcraft wrapper for Linux desktops
-+ demo_mineandhttp => dumbcraft wrapper for atmega328
-* http => http server and demo
-* avr_hardware => board layout design for AVR server
-* ipcore => core AVR IP stack for the enc424j600
-* mfs => minimalistic read-only in-flash filesystem for AVRs
-* microsd => minimalistic FAT32 read-only SD/SDHC filesystem for AVRs
-* ntsc => Code to help produce text-mode NTSC.
-
-+indicates available tests.
+Then you are GOLDEN
 
