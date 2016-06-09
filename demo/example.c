@@ -11,25 +11,6 @@
 
 #define NOOP asm volatile("nop" ::)
 
-
-static void setup_clock( void )
-{
-	/*Examine Page 33*/
-
-	CLKPR = 0x80;	/*Setup CLKPCE to be receptive*/
-	CLKPR = 0x00;	/*No scalar*/
-
-//	OSCCAL=0xff;
-}
-
-unsigned short frameno;
-unsigned char cc;
-
-#define POP enc424j600_pop8()
-#define POP16 enc424j600_pop16()
-#define PUSH(x) enc424j600_push8(x)
-#define PUSH16(x) enc424j600_push16(x)
-
 unsigned char MyIP[4] = { 169, 254, 0, 144 };
 unsigned char MyMask[4] = { 255, 255, 255, 0 };
 unsigned char MyMAC[6];
@@ -63,7 +44,7 @@ void DoPingCode()
 
 char* packet = "[MOTD]\n";
 
-void SendAnnounce( )
+void SendUDP (void)
 {
 	const char * sending;
 
@@ -83,9 +64,9 @@ void SendAnnounce( )
 	util_finish_udp_packet();
 }
 
-void HandleUDP( uint16_t len )
+void HandleUDP (uint16_t len)
 {
-	POP16; //Checksum
+	enc424j600_pop16(); //Checksum
 	len -= 8; //remove header.
 
 	//You could pop things, or check ports, etc. here.
@@ -95,26 +76,25 @@ void HandleUDP( uint16_t len )
 	iptoping[3] = ipsource[3];
 
 	if (len > 0) {
-		packet[0] = POP;
+		packet[0] = enc424j600_pop8();
 	}
 	if (len > 1) {
-		packet[1] = POP;
+		packet[1] = enc424j600_pop8();
 	}
 
 	return;
 }
 
-int main( void )
+static void setup_clock (void)
 {
-	uint8_t tick;
+	/*Examine Page 33*/
+	CLKPR = 0x80;	/*Setup CLKPCE to be receptive*/
+	CLKPR = 0x00;	/*No scalar*/
+//	OSCCAL=0xff;
+}
 
-	//Input the interrupt.
-	// DDRD &= ~_BV(2);
-	cli();
-	setup_spi();
-	sendstr( "HELLO\n" );
-	setup_clock();
-
+static void timer_config (void)
+{
 	//Configure T2 to "overflow" at 100 Hz, this lets us run the TCP clock
 	TCCR2A = _BV(WGM21) | _BV(WGM20);
 	TCCR2B = _BV(WGM22) | _BV(CS22) | _BV(CS21) | _BV(CS20);
@@ -125,60 +105,51 @@ int main( void )
 	#define T2CNT 254
 	#endif
 	OCR2A = T2CNT;
+}
 
+static int timer_tick(void)
+{
+	static uint8_t tick = 0;
+
+	if( TIFR2 & _BV(TOV2) )
+	{
+		TIFR2 |= _BV(TOV2);
+		tick++;
+
+		if( tick == 100 ) {
+			tick = 0;
+			return 1;
+		}
+	}
+	return 0;
+}
+
+int main (void)
+{
+	cli();
+	setup_spi();
+	setup_clock();
+	timer_config();
 	SetupPing();
-
 	sei();
 
-//	InitTCP();
-	// DDRD &= 0xff;
-	if( enc424j600_init( MyMAC ) )
-	{
-		sendstr( "Failure.\n" );
+	if (enc424j600_init(MyMAC)) {
+		// Failure
 		return -1;
 	}
-	sendstr( "OK.\n" );
 
-	while(1)
-	{
+	while(1) {
 		unsigned short r;
 
-		r = enc424j600_recvpack( );
-		if( r ) continue; //may be more
+		while (enc424j600_recvpack()) {
+			continue; //may be more
+		}
 
-		if( TIFR2 & _BV(TOV2) )
-		{
-			TIFR2 |= _BV(TOV2);
-			tick++;
-
-			if( tick == 100 )
-			{
-				// DoPingCode();
-				SendAnnounce();
-				tick = 0;
-			}
+		if (timer_tick()) {
+			// DoPingCode();
+			SendUDP();
 		}
 	}
 
 	return 0;
-} 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+}
