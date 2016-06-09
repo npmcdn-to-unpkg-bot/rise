@@ -15,12 +15,12 @@ static void standarddelay()
 	_delay_us(15);
 }
 
-//big endian
+// big endian
 uint16_t enc424j600_pop16()
 {
 	uint16_t ret;
-	ret = espiR() << 8;
-	return espiR() | ret;
+	ret = espiR();
+	return espiR() | (ret << 8);
 }
 
 void enc424j600_push16( uint16_t v)
@@ -28,7 +28,6 @@ void enc424j600_push16( uint16_t v)
 	espiW( v >> 8 );
 	espiW( v & 0xFF );
 }
-
 
 //little endian
 uint16_t enc424j600_pop16LE()
@@ -38,17 +37,16 @@ uint16_t enc424j600_pop16LE()
 	return (espiR() << 8) | ret;
 }
 
-void enc424j600_push16LE( uint16_t v)
+void enc424j600_push16LE (uint16_t v)
 {
-	espiW( v & 0xFF );
-	espiW( v >> 8 );
+	espiW(v & 0xFF);
+	espiW((v >> 8) & 0xFF);
 }
 
 
 void enc424j600_popblob( uint8_t * data, uint8_t len )
 {
-	while( len-- )
-	{
+	while (len--) {
 		*(data++) = enc424j600_pop8();
 	}
 }
@@ -56,7 +54,7 @@ void enc424j600_popblob( uint8_t * data, uint8_t len )
 
 void enc424j600_pushstr( const char * msg )
 {
-	for( ; *msg; msg++ ) 
+	for( ; *msg; msg++ )
 		enc424j600_push8( *msg );
 }
 
@@ -108,19 +106,6 @@ static uint8_t enc_read_ctrl_reg8_common( uint8_t addy )
 	return ret;
 }
 
-/*
-
-static uint8_t enc_read_ctrl_reg8( uint8_t addy )
-{
-	uint8_t ret;
-	ETCSPORT &= ~ETCS;
-	espiW( ERCRU );
-	espiW( addy );
-	ret = espiR();
-	ETCSPORT |= ETCS;
-	return ret;
-}*/
-
 uint16_t enc424j600_read_ctrl_reg16( uint8_t addy )
 {
 	uint16_t ret;
@@ -140,7 +125,6 @@ static void enc_oneshot( uint8_t cmd )
 }
 
 uint16_t NextPacketPointer = RX_BUFFER_START;
-
 
 static void setup_spi_ports(void)
 {
@@ -189,7 +173,7 @@ int8_t enc424j600_init( const unsigned char * macaddy )
 	return 0;
 }
 
-void enc424j600_startsend( uint16_t baseaddress)
+void enc424j600_startsend (uint16_t baseaddress)
 {
 	//Start at beginning of scratch.
 	sendbaseaddress = baseaddress;
@@ -199,34 +183,33 @@ void enc424j600_startsend( uint16_t baseaddress)
 	//Send away!
 }
 
-void enc424j600_endsend( )
+void enc424j600_endsend ()
 {
 	uint16_t i;
 	uint16_t es;
 	cs_high();
-	es = enc424j600_read_ctrl_reg16( EEGPWRPTL ) - sendbaseaddress;
+	es = enc424j600_read_ctrl_reg16(EEGPWRPTL) - sendbaseaddress;
 
-	if( enc424j600_xmitpacket( sendbaseaddress, es ) )
-	{
-		sendstr( "send fail.\n" );
+	if (enc424j600_xmitpacket(sendbaseaddress, es)) {
+		// ERROR: Send failure.
 	}
 }
 
-uint16_t enc424j600_get_write_length()
+uint16_t enc424j600_get_write_length ()
 {
-	return enc424j600_read_ctrl_reg16( EEGPWRPTL ) + 6 - sendbaseaddress;
+	return enc424j600_read_ctrl_reg16(EEGPWRPTL) + 6 - sendbaseaddress;
 }
 
-void enc424j600_wait_for_dma()
+void enc424j600_wait_for_dma ()
 {
 	uint8_t i = 0;
 	//wait for previous DMA operation to complete
-	while( ( enc_read_ctrl_reg8_common( EECON1L ) & _BV(5) )  &&  (i++ < 250 ) ) {
+	while ((enc_read_ctrl_reg8_common(EECON1L) & _BV(5)) && (i++ < 250)) {
 		standarddelay(); //This can wait up to 3.75mS
 	}
 }
 
-int8_t enc424j600_xmitpacket( uint16_t start, uint16_t len )
+int8_t enc424j600_xmitpacket (uint16_t start, uint16_t len)
 {
 	uint8_t retries = 0;
 	uint8_t i = 0;
@@ -235,12 +218,10 @@ int8_t enc424j600_xmitpacket( uint16_t start, uint16_t len )
 
 	//Wait for previous packet to complete.
 	//ECON1 is in the common banks, so we can get info on it more quickly.
-	while( enc_read_ctrl_reg8_common( EECON1L ) & _BV(1) )
-	{
+	while (enc_read_ctrl_reg8_common( EECON1L ) & _BV(1)) {
 		i++;
-		if( i > 250 )
-		{
-		// Error: XMIT Could not send.
+		if (i > 250) {
+			// Error: XMIT Could not send.
 			//Consider clearing the packet in transmission, here.
 			//Done by clearing TXRTS
 			return -1;

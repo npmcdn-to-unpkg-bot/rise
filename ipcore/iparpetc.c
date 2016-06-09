@@ -19,7 +19,6 @@ unsigned char ipsource[4];
 unsigned short remoteport;
 unsigned short localport;
 static unsigned short iptotallen;
-static unsigned short i;  //For use within the scope of an in-file function, not out of that function.
 
 #define POP enc424j600_pop8()
 #define POP16 enc424j600_pop16()
@@ -159,6 +158,7 @@ static void HandleICMP()
 
 static void HandleArp( )
 {
+	unsigned short i;
 	unsigned char sendermac_ip_and_targetmac[16];
 //	unsigned char senderip[10]; //Actually sender ip + target mac, put in one to shrink code.
 
@@ -377,6 +377,7 @@ void util_finish_udp_packet( )// unsigned short length )
 
 void SwitchToBroadcast()
 {
+	unsigned short i;
 	//Set the address we want to send to (broadcast)
 	for( i = 0; i < 6; i++ )
 		macfrom[i] = 0xff;
