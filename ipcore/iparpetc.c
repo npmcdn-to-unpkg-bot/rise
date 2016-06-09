@@ -93,70 +93,68 @@ static void HandleICMP()
 
 	switch( type )
 	{
-#ifdef PING_CLIENT_SUPPORT
-	case 0: //Response
-{
-		uint16_t id;
+		// Ping Response
+		case 0: {
+			uint16_t id;
 
-		id = POP16;
-		if( id < PING_RESPONSES_SIZE )
-		{
-			ClientPingEntries[id].last_recv_seqnum = POP16; //Seqnum
+			id = POP16;
+			if( id < PING_RESPONSES_SIZE )
+			{
+				ClientPingEntries[id].last_recv_seqnum = POP16; //Seqnum
+			}
+			enc424j600_stopop();
+
+			enc424j600_finish_callback_now();
+			break;
 		}
-		enc424j600_stopop();
 
-		enc424j600_finish_callback_now();
-}
-		break;
-#endif
+		// Ping Request
+		case 8: {
+			//Tricky: We would ordinarily POPB to read out the payload, but we're using
+			//the DMA engine to copy that data.
+			//	POPB( payload, payloadsize );
+			//Suspend reading for now (but don't allow over-writing of the data)
+			enc424j600_stopop();
+			payload_from_start = enc424j600_read_ctrl_reg16( EERXRDPTL );
 
-	case 8: //ping request
+			enc424j600_startsend( NetGetScratch() );
+			send_etherlink_header( 0x0800 );
+			send_ip_header( iptotallen, ipsource, 0x01 );
 
-		//Tricky: We would ordinarily POPB to read out the payload, but we're using
-		//the DMA engine to copy that data.
-		//	POPB( payload, payloadsize );
-		//Suspend reading for now (but don't allow over-writing of the data)
-		enc424j600_stopop();
-		payload_from_start = enc424j600_read_ctrl_reg16( EERXRDPTL );
+			PUSH16( 0 ); //ping reply + code
+			PUSH16( 0 ); //Checksum
+		//	PUSH16( id );
+		//	PUSH16( seqnum );
 
-		enc424j600_startsend( NetGetScratch() );
-		send_etherlink_header( 0x0800 );
-		send_ip_header( iptotallen, ipsource, 0x01 );
+			//Packet confiugred.  Need to copy payload.
+			//Ordinarily, we'd PUSHB for the payload, but we're currently using the DMA engine for our work here.
+			enc424j600_stopop();
+			payload_dest_start = enc424j600_read_ctrl_reg16( EEGPWRPTL );
 
-		PUSH16( 0 ); //ping reply + code
-		PUSH16( 0 ); //Checksum
-	//	PUSH16( id );
-	//	PUSH16( seqnum );
+			//+4 = id + seqnum (we're DMAing that, too)
+			enc424j600_copy_memory( payload_dest_start, payload_from_start, payloadsize + 4, RX_BUFFER_START, RX_BUFFER_END-1 );  
+			enc424j600_write_ctrl_reg16( EEGPWRPTL, payload_dest_start + payloadsize + 4 );
 
-		//Packet confiugred.  Need to copy payload.
-		//Ordinarily, we'd PUSHB for the payload, but we're currently using the DMA engine for our work here.
-		enc424j600_stopop();
-		payload_dest_start = enc424j600_read_ctrl_reg16( EEGPWRPTL );
+			enc424j600_finish_callback_now();
 
-		//+4 = id + seqnum (we're DMAing that, too)
-		enc424j600_copy_memory( payload_dest_start, payload_from_start, payloadsize + 4, RX_BUFFER_START, RX_BUFFER_END-1 );  
-		enc424j600_write_ctrl_reg16( EEGPWRPTL, payload_dest_start + payloadsize + 4 );
+			//Calculate header and ICMP checksums
+			enc424j600_start_checksum( 8+6, 20 );
+			unsigned short ppl = enc424j600_get_checksum();
+			enc424j600_start_checksum( 28+6, payloadsize + 8 );
+			enc424j600_alter_word( 18+6, ppl );
+			ppl = enc424j600_get_checksum();
+			enc424j600_alter_word( 30+6, ppl );
 
-		enc424j600_finish_callback_now();
+			enc424j600_endsend();
+			icmp_out++;
 
-		//Calculate header and ICMP checksums
-		enc424j600_start_checksum( 8+6, 20 );
-		unsigned short ppl = enc424j600_get_checksum();
-		enc424j600_start_checksum( 28+6, payloadsize + 8 );
-		enc424j600_alter_word( 18+6, ppl );
-		ppl = enc424j600_get_checksum();
-		enc424j600_alter_word( 30+6, ppl );
-
-		enc424j600_endsend();
-		icmp_out++;
-
-		break;
+			break;
+		}
 	}
-
 }
 
 
-static void HandleArp( )
+static void HandleArp (void)
 {
 	unsigned short i;
 	unsigned char sendermac_ip_and_targetmac[16];
@@ -173,71 +171,71 @@ static void HandleArp( )
 
 	switch( opcode )
 	{
-	case 1:	//Request
-{
-		unsigned char match;
+		// ARP Request
+		case 1: {
+			unsigned char match;
 
-		POPB( sendermac_ip_and_targetmac, 16 );
+			POPB( sendermac_ip_and_targetmac, 16 );
 
-		match = 1;
-//sendhex2( 0xff );
+			match = 1;
+	//sendhex2( 0xff );
 
-		//Target IP (check for copy)
-		for( i = 0; i < 4; i++ )
-			if( POP != MyIP[i] )
-				match = 0;
+			//Target IP (check for copy)
+			for( i = 0; i < 4; i++ )
+				if( POP != MyIP[i] )
+					match = 0;
 
-		if( match == 0 )
-			return;
+			if( match == 0 )
+				return;
 
-		//We must send a response, so we termiante the packet now.
-		enc424j600_finish_callback_now();
-		enc424j600_startsend( NetGetScratch() );
-		send_etherlink_header( 0x0806 );
+			//We must send a response, so we termiante the packet now.
+			enc424j600_finish_callback_now();
+			enc424j600_startsend( NetGetScratch() );
+			send_etherlink_header( 0x0806 );
 
-		PUSH16( 0x0001 ); //Ethernet
-		PUSH16( proto );  //Protocol
-		PUSH16( 0x0604 ); //HW size, Proto size
-		PUSH16( 0x0002 ); //Reply
+			PUSH16( 0x0001 ); //Ethernet
+			PUSH16( proto );  //Protocol
+			PUSH16( 0x0604 ); //HW size, Proto size
+			PUSH16( 0x0002 ); //Reply
 
-		PUSHB( MyMAC, 6 );
-		PUSHB( MyIP, 4 );
-		PUSHB( sendermac_ip_and_targetmac, 10 ); // do not send target mac.
+			PUSHB( MyMAC, 6 );
+			PUSHB( MyIP, 4 );
+			PUSHB( sendermac_ip_and_targetmac, 10 ); // do not send target mac.
 
-		enc424j600_endsend();
+			enc424j600_endsend();
 
-//		sendstr( "have match!\n" );
-
-		break;
-}
-#ifdef ARP_CLIENT_SUPPORT
-	case 2: //ARP Reply
-{
-		uint8_t sender_mac_and_ip_and_comp_mac[16];
-		POPB( sender_mac_and_ip_and_comp_mac, 16 );
-		enc424j600_finish_callback_now();
-
-
-		//First, make sure that we're the ones who are supposed to receive the ARP.
-		for( i = 0; i < 6; i++ )
-		{
-			if( sender_mac_and_ip_and_comp_mac[i+10] != MyMAC[i] )
-				break;
+			// Have a match!
+			break;
 		}
 
-		if( i != 6 )
+		// ARP Reply
+		case 2: {
+			uint8_t sender_mac_and_ip_and_comp_mac[16];
+			POPB( sender_mac_and_ip_and_comp_mac, 16 );
+			enc424j600_finish_callback_now();
+
+
+			//First, make sure that we're the ones who are supposed to receive the ARP.
+			for( i = 0; i < 6; i++ )
+			{
+				if( sender_mac_and_ip_and_comp_mac[i+10] != MyMAC[i] )
+					break;
+			}
+
+			if( i != 6 )
+				break;
+
+			//We're the right recipent.  Put it in the table.
+			memcpy( &ClientArpTable[ClientArpTablePointer], sender_mac_and_ip_and_comp_mac, 10 );
+
+			ClientArpTablePointer = (ClientArpTablePointer+1)%ARP_CLIENT_TABLE_SIZE;
 			break;
+		}
 
-		//We're the right recipent.  Put it in the table.
-		memcpy( &ClientArpTable[ClientArpTablePointer], sender_mac_and_ip_and_comp_mac, 10 );
-
-		ClientArpTablePointer = (ClientArpTablePointer+1)%ARP_CLIENT_TABLE_SIZE;
-}
-#endif
-
-	default:
-		//???? don't know what to do.
-		return;
+		default: {
+			//???? don't know what to do.
+			return;
+		}
 	}
 }
 
@@ -336,8 +334,6 @@ int enc424j600_receivecallback( uint16_t packetlen )
 }
 
 
-#ifdef INCLUDE_UDP
-
 void util_finish_udp_packet( )// unsigned short length )
 {
 	volatile unsigned short ppl, ppl2;
@@ -371,10 +367,6 @@ void util_finish_udp_packet( )// unsigned short length )
 }
 
 
-#endif
-
-
-
 void SwitchToBroadcast()
 {
 	unsigned short i;
@@ -382,8 +374,6 @@ void SwitchToBroadcast()
 	for( i = 0; i < 6; i++ )
 		macfrom[i] = 0xff;
 }
-
-#ifdef ARP_CLIENT_SUPPORT
 
 int8_t RequestARP( uint8_t * ip )
 {
@@ -423,10 +413,6 @@ int8_t RequestARP( uint8_t * ip )
 
 struct ARPEntry ClientArpTable[ARP_CLIENT_TABLE_SIZE];
 uint8_t ClientArpTablePointer = 0;
-
-#endif
-
-#ifdef PING_CLIENT_SUPPORT
 
 struct PINGEntries ClientPingEntries[PING_RESPONSES_SIZE];
 
@@ -476,7 +462,3 @@ void DoPing( uint8_t pingslot )
 
 	enc424j600_endsend();
 }
-
-#endif
-
-
