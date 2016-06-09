@@ -20,10 +20,6 @@ unsigned short remoteport;
 unsigned short localport;
 static unsigned short iptotallen;
 
-
-#define PUSH(x) enc424j600_push8(x)
-#define PUSH16(x) enc424j600_push16(x)
-#define PUSHB(x,s) enc424j600_pushblob(x,s)
 #define SIZEOFICMP 28
 
 
@@ -38,12 +34,12 @@ uint16_t NetGetScratch()
 
 void send_etherlink_header( unsigned short type )
 {
-	PUSHB( macfrom, 6 );
+	enc424j600_pushblob( macfrom, 6 );
 
 // The mac does this for us.
-	PUSHB( MyMAC, 6 );
+	enc424j600_pushblob( MyMAC, 6 );
 
-	PUSH16( type );
+	enc424j600_push16( type );
 }
 
 void send_ip_header( unsigned short totallen, const unsigned char * to, unsigned char proto )
@@ -54,22 +50,22 @@ void send_ip_header( unsigned short totallen, const unsigned char * to, unsigned
 	data[2] = totallen >> 8;
 	data[3] = totallen & 0xFF;
 	data[9] = proto;
-	PUSHB( data, 12 );
+	enc424j600_pushblob( data, 12 );
 */
 
-	PUSH16( 0x4500 );
-	PUSH16( totallen );
+	enc424j600_push16( 0x4500 );
+	enc424j600_push16( totallen );
 
-	PUSH16( 0x0000 ); //ID
-	PUSH16( 0x4000 ); //Don't frgment, no fragment offset
+	enc424j600_push16( 0x0000 ); //ID
+	enc424j600_push16( 0x4000 ); //Don't frgment, no fragment offset
 
-	PUSH( 64 ); // TTL
-	PUSH( proto ); // protocol
+	enc424j600_push8( 64 ); // TTL
+	enc424j600_push8( proto ); // protocol
 
-	PUSH16( 0 ); //Checksum
+	enc424j600_push16( 0 ); //Checksum
 
-	PUSHB( MyIP, 4 );
-	PUSHB( to, 4 );
+	enc424j600_pushblob( MyIP, 4 );
+	enc424j600_pushblob( to, 4 );
 }
 
 
@@ -118,13 +114,13 @@ static void HandleICMP()
 			send_etherlink_header( 0x0800 );
 			send_ip_header( iptotallen, ipsource, 0x01 );
 
-			PUSH16( 0 ); //ping reply + code
-			PUSH16( 0 ); //Checksum
-		//	PUSH16( id );
-		//	PUSH16( seqnum );
+			enc424j600_push16( 0 ); //ping reply + code
+			enc424j600_push16( 0 ); //Checksum
+		//	enc424j600_push16( id );
+		//	enc424j600_push16( seqnum );
 
 			//Packet confiugred.  Need to copy payload.
-			//Ordinarily, we'd PUSHB for the payload, but we're currently using the DMA engine for our work here.
+			//Ordinarily, we'd enc424j600_pushblob for the payload, but we're currently using the DMA engine for our work here.
 			enc424j600_stopop();
 			payload_dest_start = enc424j600_read_ctrl_reg16( EEGPWRPTL );
 
@@ -190,14 +186,14 @@ static void HandleArp (void)
 			enc424j600_startsend( NetGetScratch() );
 			send_etherlink_header( 0x0806 );
 
-			PUSH16( 0x0001 ); //Ethernet
-			PUSH16( proto );  //Protocol
-			PUSH16( 0x0604 ); //HW size, Proto size
-			PUSH16( 0x0002 ); //Reply
+			enc424j600_push16( 0x0001 ); //Ethernet
+			enc424j600_push16( proto );  //Protocol
+			enc424j600_push16( 0x0604 ); //HW size, Proto size
+			enc424j600_push16( 0x0002 ); //Reply
 
-			PUSHB( MyMAC, 6 );
-			PUSHB( MyIP, 4 );
-			PUSHB( sendermac_ip_and_targetmac, 10 ); // do not send target mac.
+			enc424j600_pushblob( MyMAC, 6 );
+			enc424j600_pushblob( MyIP, 4 );
+			enc424j600_pushblob( sendermac_ip_and_targetmac, 10 ); // do not send target mac.
 
 			enc424j600_endsend();
 
@@ -391,17 +387,17 @@ int8_t RequestARP( uint8_t * ip )
 	enc424j600_startsend( NetGetScratch() );
 	send_etherlink_header( 0x0806 );
 
-	PUSH16( 0x0001 ); //Ethernet
-	PUSH16( 0x0800 ); //Protocol (IP)
-	PUSH16( 0x0604 ); //HW size, Proto size
-	PUSH16( 0x0001 ); //Request
+	enc424j600_push16( 0x0001 ); //Ethernet
+	enc424j600_push16( 0x0800 ); //Protocol (IP)
+	enc424j600_push16( 0x0604 ); //HW size, Proto size
+	enc424j600_push16( 0x0001 ); //Request
 
-	PUSHB( MyMAC, 6 );
-	PUSHB( MyIP, 4 );
-	PUSH16( 0x0000 );
-	PUSH16( 0x0000 );
-	PUSH16( 0x0000 );
-	PUSHB( ip, 4 );
+	enc424j600_pushblob( MyMAC, 6 );
+	enc424j600_pushblob( MyIP, 4 );
+	enc424j600_push16( 0x0000 );
+	enc424j600_push16( 0x0000 );
+	enc424j600_push16( 0x0000 );
+	enc424j600_pushblob( ip, 4 );
 
 	enc424j600_endsend();
 
@@ -445,13 +441,13 @@ void DoPing( uint8_t pingslot )
 	send_etherlink_header( 0x0800 );
 	send_ip_header( 32, ClientPingEntries[pingslot].ip, 0x01 );
 
-	PUSH16( 0x0800 ); //ping request + 0 for code
-	PUSH16( ~checksum ); //Checksum
-	PUSH16( pingslot ); //Idneitifer
-	PUSH16( seqnum ); //Sequence number
+	enc424j600_push16( 0x0800 ); //ping request + 0 for code
+	enc424j600_push16( ~checksum ); //Checksum
+	enc424j600_push16( pingslot ); //Idneitifer
+	enc424j600_push16( seqnum ); //Sequence number
 
-	PUSH16( 0x0000 ); //Payload
-	PUSH16( 0x0000 );
+	enc424j600_push16( 0x0000 ); //Payload
+	enc424j600_push16( 0x0000 );
 
 	enc424j600_start_checksum( 8, 20 );
 	ppl = enc424j600_get_checksum();
