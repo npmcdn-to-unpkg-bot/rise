@@ -20,9 +20,6 @@ unsigned short remoteport;
 unsigned short localport;
 static unsigned short iptotallen;
 
-#define POP enc424j600_pop8()
-#define POP16 enc424j600_pop16()
-#define POPB(x,s) enc424j600_popblob( x,s )
 
 #define PUSH(x) enc424j600_push8(x)
 #define PUSH16(x) enc424j600_push16(x)
@@ -87,9 +84,9 @@ static void HandleICMP()
 
 	icmp_in++;
 
-	type = POP;
-	POP; //code
-	POP16; //Checksum
+	type = enc424j600_pop8();
+	enc424j600_pop8(); //code
+	enc424j600_pop16(); //Checksum
 
 	switch( type )
 	{
@@ -97,10 +94,10 @@ static void HandleICMP()
 		case 0: {
 			uint16_t id;
 
-			id = POP16;
+			id = enc424j600_pop16();
 			if( id < PING_RESPONSES_SIZE )
 			{
-				ClientPingEntries[id].last_recv_seqnum = POP16; //Seqnum
+				ClientPingEntries[id].last_recv_seqnum = enc424j600_pop16(); //Seqnum
 			}
 			enc424j600_stopop();
 
@@ -164,10 +161,10 @@ static void HandleArp (void)
 	unsigned char opcode;
 //	unsigned char ipproto;
 
-	POP16; //Hardware type
-	proto = POP16;
-	POP16; //hwsize, protosize
-	opcode = POP16;  //XXX: This includes "code" as well, it seems.
+	enc424j600_pop16(); //Hardware type
+	proto = enc424j600_pop16();
+	enc424j600_pop16(); //hwsize, protosize
+	opcode = enc424j600_pop16();  //XXX: This includes "code" as well, it seems.
 
 	switch( opcode )
 	{
@@ -175,14 +172,14 @@ static void HandleArp (void)
 		case 1: {
 			unsigned char match;
 
-			POPB( sendermac_ip_and_targetmac, 16 );
+			enc424j600_popblob( sendermac_ip_and_targetmac, 16 );
 
 			match = 1;
 	//sendhex2( 0xff );
 
 			//Target IP (check for copy)
 			for( i = 0; i < 4; i++ )
-				if( POP != MyIP[i] )
+				if( enc424j600_pop8() != MyIP[i] )
 					match = 0;
 
 			if( match == 0 )
@@ -211,7 +208,7 @@ static void HandleArp (void)
 		// ARP Reply
 		case 2: {
 			uint8_t sender_mac_and_ip_and_comp_mac[16];
-			POPB( sender_mac_and_ip_and_comp_mac, 16 );
+			enc424j600_popblob( sender_mac_and_ip_and_comp_mac, 16 );
 			enc424j600_finish_callback_now();
 
 
@@ -254,16 +251,16 @@ int enc424j600_receivecallback( uint16_t packetlen )
 	//macto (ignore) our mac filter handles this.
 	enc424j600_dumpbytes( 6 );
 
-	POPB( macfrom, 6 );
+	enc424j600_popblob( macfrom, 6 );
 
 	//Make sure it's ethernet!
-	if (POP != 0x08) {
+	if (enc424j600_pop8() != 0x08) {
 		// ERROR: Not an ethernet packet
 		return 1;
 	}
 
 	//Is it ARP?
-	if (POP == 0x06) {
+	if (enc424j600_pop8() == 0x06) {
 		HandleArp();
 		return 0;
 	}
@@ -272,24 +269,24 @@ int enc424j600_receivecallback( uint16_t packetlen )
 
 	//So, we're expecting a '45
 
-	if (POP != 0x45) {
+	if (enc424j600_pop8() != 0x45) {
 		// ERROR: Not an IP packet
 		return 1;
 	}
 
-	POP; //differentiated services field.
+	enc424j600_pop8(); //differentiated services field.
 
-	iptotallen = POP16;
+	iptotallen = enc424j600_pop16();
 	enc424j600_dumpbytes( 5 ); //ID, Offset+FLAGS+TTL
-	ipproto = POP;
+	ipproto = enc424j600_pop8();
 
-	POP16; //header checksum
+	enc424j600_pop16(); //header checksum
 
-	POPB( ipsource, 4 );
+	enc424j600_popblob( ipsource, 4 );
 
 	for (i = 0; i < 4; i++) {
 		unsigned char m = ~MyMask[i];
-		unsigned char ch = POP;
+		unsigned char ch = enc424j600_pop8();
 		if (ch == MyIP[i] || (ch & m) == 0xff) {
 			continue;
 		}
@@ -298,8 +295,8 @@ int enc424j600_receivecallback( uint16_t packetlen )
 
 	//Tricky, for DHCP packets, we have to detect it even if it is not to us.
 	if (ipproto == 17) {
-		remoteport = POP16;
-		localport = POP16;
+		remoteport = enc424j600_pop16();
+		localport = enc424j600_pop16();
 	}
 
 	if (!is_the_packet_for_me) {
@@ -318,7 +315,7 @@ int enc424j600_receivecallback( uint16_t packetlen )
 
 		// UDP
 		case 17: {
-			HandleUDP( POP16 );
+			HandleUDP(enc424j600_pop16());
 			break;
 		}
 
