@@ -11,7 +11,7 @@
 #define IP_HEADER_LENGTH 20
 
 //enc28j60 calls this.
-void enc28j60_receivecallback( uint16_t packetlen );
+int enc28j60_receivecallback( uint16_t packetlen );
 
 //You must define these.
 extern unsigned char MyIP[];

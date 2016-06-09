@@ -30,9 +30,6 @@ static unsigned short i;  //For use within the scope of an in-file function, not
 #define PUSHB(x,s) enc424j600_pushblob(x,s)
 #define SIZEOFICMP 28
 
-#ifdef INCLUDE_TCP
-#include "tcp.h"
-#endif
 
 uint16_t NetGetScratch()
 {
@@ -41,247 +38,6 @@ uint16_t NetGetScratch()
 	if( scratch == TX_SCRATCHES ) scratch = 0;
 	return scratch * MAX_FRAMELEN;
 }
-
-
-#ifdef ENABLE_DHCP_CLIENT
-
-#ifndef INCLUDE_UDP
-#error ERROR: You must have UDP support for DHCP support.
-#endif
-
-void RequestNewIP( uint8_t mode, uint8_t * negotiating_ip, uint8_t * dhcp_server );
-
-uint8_t dhcp_clocking = 1;
-uint16_t dhcp_seconds_remain = 0;
-uint8_t dhcp_ticks_in_sec = 0;
-const char * DHCPName = 0;
-
-void HandleDHCP( uint16_t len )
-{
-	uint8_t tmpip[4];
-	uint8_t tmp[4];
-	uint8_t optionsleft = 48; //We only allow for up to 48 options
-	uint8_t is_ack_packet = 0;
-	uint16_t first4, second4;
-
-	POP16; //Clear out checksum
-
-	//Process DHCP!
-	if( POP != 2 ) return; //Not a reply?
-	if( POP != 1 ) return; //Not Ethernet?
-	POP16; //size of packets + Hops
-
-	//Make sure transaction IDs match.
-	enc424j600_popblob( tmp, 4 );
-	if( memcmp( tmp, MyMAC, 4 ) != 0 )
-	{
-		//Not our request?
-		return;
-	}
-
-	enc424j600_dumpbytes( 8 ); //time elapsed + bootpflags + Client IP address
-
-	enc424j600_popblob( tmpip, 4 );	//MY IP ADDRESS!!!	
-	
-	enc424j600_dumpbytes( 0x18 + 0xc0 ); //Next IP + Relay IP + Mac + Padding + server name + boot name
-
-	first4 = POP16;
-	second4 = POP16;
-
-	if( first4 != 0x6382 || second4 != 0x5363 )
-	{
-		return;
-	}
-
-	//Ok, we know we have a valid DHCP packet.
-
-	//We dont want to get stuck, so we will eventually bail if we have an issue pasrsing.
-	while( optionsleft-- )
-	{
-		uint8_t option = POP;
-		uint8_t length = POP;
-
-		switch(option)
-		{
-		case 0x35: //DHCP Message Type
-		{
-			if( length < 1 ) return;
-			uint8_t rqt = POP;
-
-			if( rqt == 0x02 ) 
-			{
-				//We have an offer, extend a request.
-				//We will ignore the rest of the packet.
-				enc424j600_finish_callback_now();
-				RequestNewIP( 3, tmpip, ipsource );  //Request
-				return;
-			}
-			else if( rqt == 0x05 ) // We received an ack, accept it.
-			{
-				//IP Is valid.
-				is_ack_packet = 1;
-				if( 0 == dhcp_seconds_remain )
-					dhcp_seconds_remain = 0xffff;
-				memcpy( MyIP, tmpip, 4 );
-			}
-
-			length--;
-			break;
-		}
-		case 0x3a: //Renewal time
-		{
-			if( length < 4 || !is_ack_packet ) break;
-			first4 = POP16;
-			second4 = POP16;
-//			printf( "LEASE TIME: %d %d\n", first4, second4 );
-			if( first4 )
-			{
-				dhcp_seconds_remain = 0xffff;
-			}
-			else
-			{
-				dhcp_seconds_remain = second4;
-			}
-
-			length -= 4;
-			break;
-		}
-		case 0x01: //Subnet mask
-		{
-			if( length < 4 || !is_ack_packet ) break;
-			enc424j600_popblob( MyMask, 4 );
-			length -= 4;
-			break;
-		}
-		case 0x03: //Router mask
-		{
-			if( length < 4 || !is_ack_packet ) break;
-			enc424j600_popblob( MyGateway, 4 );
-			length -= 4;
-			break;
-		}
-		case 0xff:  //End of list.
-			enc424j600_finish_callback_now();
-			if( is_ack_packet )
-				GotDHCPLease();
-			return; 
-		case 0x42: //Time server
-		case 0x06: //DNS server
-		default:
-			break;
-		}
-		enc424j600_dumpbytes( length );
-	}
-}
-
-void SetupDHCPName( const char * name  )
-{
-	DHCPName = name;
-}
-
-void TickDHCP()
-{
-	if( dhcp_ticks_in_sec++ < DHCP_TICKS_PER_SECOND )
-	{
-		return;
-	}
-
-	dhcp_ticks_in_sec = 0;
-//		sendhex4( dhcp_seconds_remain );
-
-	if( dhcp_seconds_remain == 0 )
-	{
-		//No DHCP received yet.
-		if( dhcp_clocking == 250 ) dhcp_clocking = 0;
-		dhcp_clocking++;
-		RequestNewIP( 1, MyIP, 0 );
-	}
-	else
-	{
-		dhcp_seconds_remain--;
-	}
-}
-
-//Mode = 1 for discover, Mode = 3 for request - if discover, dhcp_server should be 0.
-void RequestNewIP( uint8_t mode, uint8_t * negotiating_ip, uint8_t * dhcp_server )
-{
-	uint8_t oldip[4];
-	SwitchToBroadcast();
-
-	enc424j600_stopop();
-	enc424j600_startsend( NetGetScratch() );
-	send_etherlink_header( 0x0800 );
-
-	//Tricky - backup our IP - we want to spoof it to 0.0.0.0
-	memcpy( oldip, MyIP, 4 );
-	MyIP[0] = 0; MyIP[1] = 0; MyIP[2] = 0; MyIP[3] = 0;
-	send_ip_header( 0, "\xff\xff\xff\xff", 17 ); //UDP Packet to 255.255.255.255
-	memcpy( MyIP, oldip, 4 );
-	
-/*
-	enc424j600_push16( 68 );  //From bootpc
-	enc424j600_push16( 67 );  //To bootps
-	enc424j600_push16( 0 ); //length for later
-	enc424j600_push16( 0 ); //csum for later
-
-	//Payload of BOOTP packet.
-	//	1, //Bootp request
-	//	1, //Ethernet
-	enc424j600_push16( 0x0101 );
-	//	6, //MAC Length
-	//	0, //Hops
-	enc424j600_push16( 0x0600 );
-*/
-	enc424j600_pushpgmblob( PSTR("\x00\x44\x00\x43\x00\x00\x00\x00\x01\x01\x06"), 12 ); //NOTE: Last digit is 0 on wire, not included in string.
-
-	enc424j600_pushblob( MyMAC, 4 );
-
-	enc424j600_push16( dhcp_clocking ); //seconds
-	enc424j600_pushzeroes( 10 ); //unicast, CLIADDR, YIADDR
-	if( dhcp_server )
-		enc424j600_pushblob( dhcp_server, 4 );
-	else
-		enc424j600_pushzeroes( 4 );
-	enc424j600_pushzeroes( 4 ); //GIADDR IP
-	enc424j600_pushblob( MyMAC, 6 ); //client mac
-	enc424j600_pushzeroes( 10 + 0x40 + 0x80 ); //padding + Server Host Name
-	enc424j600_push16( 0x6382 ); //DHCP Magic Cookie
-	enc424j600_push16( 0x5363 );
-
-	//Now we are on our DHCP portion
-	enc424j600_push8( 0x35 );  //DHCP Message Type
-	enc424j600_push16( 0x0100 | mode );
-
-	{
-		enc424j600_push16( 0x3204 ); //Requested IP address. (4 length)
-		enc424j600_pushblob( negotiating_ip, 4 );
-	}
-
-	if( dhcp_server ) //request
-	{
-		enc424j600_push16( 0x3604 );
-		enc424j600_pushblob( dhcp_server, 4 );
-	}
-
-	if( DHCPName )
-	{
-		uint8_t namelen = strlen( DHCPName );
-		enc424j600_push8( 0x0c ); //Name
-		enc424j600_push8( namelen );
-		enc424j600_pushblob( DHCPName, namelen );
-	}
-
-	enc424j600_push16( 0x3702 ); //Parameter request list
-	enc424j600_push16( 0x0103 ); //subnet mask, router
-//	enc424j600_push16( 0x2a06 ); //NTP server, DNS server  (We don't use either NTP or DNS)
-	enc424j600_push8( 0xff ); //End option
-
-	enc424j600_pushzeroes( 32 ); //Padding
-
-	util_finish_udp_packet();
-}
-
-#endif
 
 
 void send_etherlink_header( unsigned short type )
@@ -485,19 +241,16 @@ static void HandleArp( )
 	}
 }
 
-void enc424j600_receivecallback( uint16_t packetlen )
+int enc424j600_receivecallback( uint16_t packetlen )
 {
 	uint8_t is_the_packet_for_me = 1;
 	unsigned char i;
 	unsigned char ipproto;
 
 	//First and foremost, make sure we have a big enough packet to work with.
-	if( packetlen < 8 )
-	{
-#ifdef ETH_DEBUG
-		sendstr( "Runt\n" );
-#endif
-		return;
+	if (packetlen < 8) {
+		// ERROR: Received runt packet
+		return 1;
 	}
 
 	//macto (ignore) our mac filter handles this.
@@ -506,31 +259,24 @@ void enc424j600_receivecallback( uint16_t packetlen )
 	POPB( macfrom, 6 );
 
 	//Make sure it's ethernet!
-	if( POP != 0x08 )
-	{
-#ifdef ETH_DEBUG
-		sendstr( "Not ethernet.\n" );
-#endif
-		return;
+	if (POP != 0x08) {
+		// ERROR: Not an ethernet packet
+		return 1;
 	}
 
 	//Is it ARP?
-	if( POP == 0x06 )
-	{
-		HandleArp( );
-		return;
+	if (POP == 0x06) {
+		HandleArp();
+		return 0;
 	}
 
 	//otherwise it's standard IP
 
 	//So, we're expecting a '45
 
-	if( POP != 0x45 )
-	{
-#ifdef ETH_DEBUG
-		sendstr( "Not IP.\n" );
-#endif
-		return;
+	if (POP != 0x45) {
+		// ERROR: Not an IP packet
+		return 1;
 	}
 
 	POP; //differentiated services field.
@@ -543,67 +289,47 @@ void enc424j600_receivecallback( uint16_t packetlen )
 
 	POPB( ipsource, 4 );
 
-
-	for( i = 0; i < 4; i++ )
-	{
+	for (i = 0; i < 4; i++) {
 		unsigned char m = ~MyMask[i];
 		unsigned char ch = POP;
-		if( ch == MyIP[i] || (ch & m) == 0xff  ) continue;
+		if (ch == MyIP[i] || (ch & m) == 0xff) {
+			continue;
+		}
 		is_the_packet_for_me = 0;
 	}
 
 	//Tricky, for DHCP packets, we have to detect it even if it is not to us.
-	if( ipproto == 17 )
-	{
+	if (ipproto == 17) {
 		remoteport = POP16;
 		localport = POP16;
-#ifdef ENABLE_DHCP_CLIENT
-		if( localport == 68 && !dhcp_seconds_remain )
-		{
-			HandleDHCP( POP16 );
-			return;
-		}
-#endif
 	}
 
-	if( !is_the_packet_for_me )
-	{
-#ifdef ETH_DEBUG
-		sendstr( "not for me\n" );
-#endif
-		return;
+	if (!is_the_packet_for_me) {
+		// ERROR: Packet is not for us
+		return 1;
 	}
 
 	//XXX TODO Handle IPL > 5  (IHL?)
 
-	switch( ipproto )
-	{
-	case 1: //ICMP
+	switch(ipproto) {
+		// ICMP
+		case 1: {
+			HandleICMP();
+			break;
+		}
 
-		HandleICMP();
-		break;
-#ifdef INCLUDE_UDP
-	case 17:
-	{
-		//err is this dangerous?
-		HandleUDP( POP16 );
-		break;	
-	}
-#endif
-#ifdef INCLUDE_TCP
-	case 6: // TCP
-	{
+		// UDP
+		case 17: {
+			HandleUDP( POP16 );
+			break;
+		}
 
-		remoteport = POP16;
-		localport = POP16;
-		iptotallen-=20;
-		HandleTCP( iptotallen );
-		break;
+		default: {
+			break;
+		}
 	}
-#endif // HAVE_TCP_SUPPORT
-	default:
-		break;
-	}
+
+	return 0;
 
 //finishcb:
 //	enc424j600_finish_callback_now();
@@ -720,7 +446,7 @@ int8_t GetPingslot( uint8_t * ip )
 
 void DoPing( uint8_t pingslot )
 {
-	unsigned short ppl;	
+	unsigned short ppl;
 	uint16_t seqnum = ++ClientPingEntries[pingslot].last_send_seqnum;
 	uint16_t checksum = (seqnum + pingslot + 0x0800) ;
 

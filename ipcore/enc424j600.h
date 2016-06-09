@@ -44,7 +44,7 @@ int8_t enc424j600_xmitpacket( uint16_t start, uint16_t len );
 unsigned short enc424j600_recvpack();
 
 //You have to write this!
-void enc28j60_receivecallback( uint16_t packetlen );
+int enc28j60_receivecallback( uint16_t packetlen );
 
 
 //Finish up any reading. 							//CLOSURE
@@ -99,7 +99,7 @@ uint16_t enc424j600_read_ctrl_reg16( uint8_t addy );
 
 
 //User must provide this:
-void enc424j600_receivecallback( uint16_t receivedbytecount );
+int enc424j600_receivecallback( uint16_t receivedbytecount );
 
 
 //For telling where the current transaction started.
