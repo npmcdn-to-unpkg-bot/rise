@@ -54,25 +54,6 @@ void enc424j600_popblob( uint8_t * data, uint8_t len )
 	}
 }
 
-void enc424j600_pushpgmstr( const char * msg )
-{
-	uint8_t r;
-	do
-	{
-		r = pgm_read_byte(msg++);
-		if( !r ) break;
-		enc424j600_push8( r );
-	} while( 1 );
-}
-
-void enc424j600_pushpgmblob( const uint8_t * data, uint8_t len )
-{
-	while( len-- )
-	{
-		enc424j600_push8( pgm_read_byte(data++) );
-	}
-}
-
 
 void enc424j600_pushstr( const char * msg )
 {
@@ -97,23 +78,34 @@ void enc424j600_dumpbytes( uint8_t len )
 }
 
 
-void enc424j600_write_ctrl_reg16( uint8_t addy, uint16_t value )
+static void cs_low(void)
 {
 	ETCSPORT &= ~ETCS;
+}
+
+static void cs_high(void)
+{
+	ETCSPORT |= ETCS;
+}
+
+
+void enc424j600_write_ctrl_reg16( uint8_t addy, uint16_t value )
+{
+	cs_low();
 	espiW( EWCRU );
 	espiW( addy );
 	enc424j600_push16LE( value );
-	ETCSPORT |= ETCS;	
+	cs_high();
 }
 
 //This requires the proper bank to be selected.
 static uint8_t enc_read_ctrl_reg8_common( uint8_t addy )
 {
 	uint8_t ret;
-	ETCSPORT &= ~ETCS;
+	cs_low();
 	espiW( ERCR | addy );
 	ret = espiR();
-	ETCSPORT |= ETCS;
+	cs_high();
 	return ret;
 }
 
@@ -133,33 +125,37 @@ static uint8_t enc_read_ctrl_reg8( uint8_t addy )
 uint16_t enc424j600_read_ctrl_reg16( uint8_t addy )
 {
 	uint16_t ret;
-	ETCSPORT &= ~ETCS;
+	cs_low();
 	espiW( ERCRU );
 	espiW( addy );
 	ret = enc424j600_pop16LE();
-	ETCSPORT |= ETCS;
+	cs_high();
 	return ret;
 }
 
 static void enc_oneshot( uint8_t cmd )
 {
-	ETCSPORT &= ~ETCS;
+	cs_low();
 	espiW( cmd );
-	ETCSPORT |= ETCS;
+	cs_high();
 }
 
 uint16_t NextPacketPointer = RX_BUFFER_START;
 
 
-int8_t enc424j600_init( const unsigned char * macaddy )
+static void setup_spi_ports(void)
 {
-	unsigned char i = 0;
-
 	ETPORT &= ~ETSCK;
 	ETDDR &= ~( ETSO | ETINT );
 	ETDDR |= ( ETSCK | ETSI	);
 	ETCSDDR |= ETCS;
-	ETCSPORT |= ETCS;
+	cs_high();
+}
+
+int8_t enc424j600_init( const unsigned char * macaddy )
+{
+	unsigned char i = 0;
+	setup_spi_ports();
 
 #ifdef ETH_HARDWARE_UART
 #if ETH_HARDWARE_UART == 1
@@ -228,7 +224,7 @@ void enc424j600_startsend( uint16_t baseaddress)
 	//Start at beginning of scratch.
 	sendbaseaddress = baseaddress;
 	enc424j600_write_ctrl_reg16( EEGPWRPTL, baseaddress );
-	ETCSPORT &= ~ETCS;
+	cs_low();
 	espiW( EWGPDATA );
 	//Send away!
 }
@@ -237,7 +233,7 @@ void enc424j600_endsend( )
 {
 	uint16_t i;
 	uint16_t es;
-	ETCSPORT |= ETCS;
+	cs_high();
 	es = enc424j600_read_ctrl_reg16( EEGPWRPTL ) - sendbaseaddress;
 
 	if( enc424j600_xmitpacket( sendbaseaddress, es ) )
@@ -325,7 +321,7 @@ int8_t enc424j600_xmitpacket( uint16_t start, uint16_t len )
 void enc424j600_finish_callback_now()
 {
 	unsigned short nextpos;
-	ETCSPORT |= ETCS;
+	cs_high();
 	//XXX BUG: NextPacketPointer-2 may be less than in the RX area
 	if( NextPacketPointer == RX_BUFFER_START )
 		nextpos = 0x5FFE;  //XXX MAGIC NUMBER
@@ -340,7 +336,7 @@ void enc424j600_finish_callback_now()
 
 void enc424j600_stopop()
 {
-	ETCSPORT |= ETCS;
+	cs_high();
 }
 
 unsigned short enc424j600_recvpack()
@@ -379,7 +375,7 @@ unsigned short enc424j600_recvpack()
 
 	//Start reading!!!
 
-	ETCSPORT &= ~ETCS;
+	cs_low();
 	espiW( ERRXDATA );
 
 	NextPacketPointer = enc424j600_pop16LE();
@@ -433,11 +429,11 @@ uint16_t enc424j600_get_checksum()
 void enc424j600_alter_word( uint16_t address, uint16_t val )
 {
 	enc424j600_write_ctrl_reg16( EEUDAWRPTL, address + sendbaseaddress );
-	ETCSPORT &= ~ETCS;
+	cs_low();
 	espiW( EWUDADATA );
 	espiW( val >> 8 );
 	espiW( val & 0xFF );
-	ETCSPORT |= ETCS;
+	cs_high();
 }
 
 
@@ -452,56 +448,3 @@ void enc424j600_copy_memory( uint16_t to, uint16_t from, uint16_t length, uint16
 	enc424j600_write_ctrl_reg16( EEDMALENL, length );
 	enc_oneshot( ESDMACOPY ); //XXX TODO: Should we be purposefully /not/ calculating checksum?  Does it even matter?
 }
-
-
-//NOTE: What about read/write PHY? I don't think we need it.
-
-
-
-
-
-//Code graveyard
-/*
-
-
-//This was used to iterate over a configuration array, if we had more than
-//six configuration items it would produce smaller code, but we only have four.
-
-//This is used for the loop iteration for configuration.
-//It's less expensive when you have more than six values, but
-//we don't so, we just hardcode it.
-const unsigned char enc_config_data[] PROGMEM = {
-
-	//EECON2, add on "txmac" so we can save that time internally.
-	EECON2L,   0x00, 0xEB,
-
-	//XXX TODO Why does this need to be -1
-	EERXSTL, (RX_BUFFER_START & 0xFF), RX_BUFFER_START >> 8,
-	EMAMXFLL, MAX_FRAMELEN & 0xFF, MAX_FRAMELEN >> 8,
-
-
-	//Must have RX tail here otherwise we will have difficulty moving our buffer along.
-	EERXTAILL, 0xFE, 0x5F,
-
-//	EERXHEADL, RX_BUFFER_START & 0xFF, RX_BUFFER_START >> 8,
-
-
-	0xFF, 0xFF, 0xff
-};
-
-
-
-//Here is one option, a loop to iterate through values.  Unless you exceed six variables, it's cheaper to just
-//enc424j600_write_ctrl_reg16(...) your stuff.
-	i = 0;
-	do
-	{
-		//I haven't the foggiest idea why this needs to be volatile.
-		volatile uint16_t val;
-		uint8_t targ;
-		targ = pgm_read_byte( enc_config_data + (i++) );
-		val = pgm_read_word( enc_config_data + i ); i+=2;
-		if( targ == 0xFF ) break;
-		enc424j600_write_ctrl_reg16( targ, val );
-	} while(1);
-*/
