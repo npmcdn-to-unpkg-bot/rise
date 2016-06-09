@@ -1,6 +1,5 @@
 //Copyright 2012 Charles Lohr under the MIT/x11, newBSD, LGPL or GPL licenses.  You choose.
 
-
 #include "enc424j600.h"
 #include "enc424j600_regs.h"
 #include <avr/io.h>
@@ -157,40 +156,11 @@ int8_t enc424j600_init( const unsigned char * macaddy )
 	unsigned char i = 0;
 	setup_spi_ports();
 
-#ifdef ETH_HARDWARE_UART
-#if ETH_HARDWARE_UART == 1
-	UBRR1 = 0; //10MHz?
-	UCSR1C = _BV(UMSEL11) | _BV(UMSEL10);
-	UCSR1B = _BV(RXEN1) | _BV(TXEN1);
-	UBRR1 = 0;
-#elif ETH_HARDWARE_UART == 0
-	UBRR0 = 0; //10MHz?
-	UCSR0C = _BV(UMSEL01) | _BV(UMSEL00);
-	UCSR0B = _BV(RXEN0) | _BV(TXEN0);
-	UBRR0 = 0;
-#else
-	#error Only UART 1 is supported for hardware SPI ethernet.
-#endif
-#endif
-
 	standarddelay();
 	enc424j600_write_ctrl_reg16( EEUDASTL, 0x1234 );
 	if( enc424j600_read_ctrl_reg16( EEUDASTL ) != 0x1234 )
 		return -1;
 
-/*
-	//Section 8.1 of datasheet.
-	do
-	{
-		enc424j600_write_ctrl_reg16( EEUDASTL, 0x1234 );
-		i++;
-		if( i > 250 )
-		{
-			//Error. Cannot initialize.
-			return -1;
-		}
-	} while( enc424j600_read_ctrl_reg16( EEUDASTL ) != 0x1234 );
-*/
 	//Instead of ECONing, we do it this way.
 	enc_oneshot( ESSETETHRST );
 
@@ -251,7 +221,9 @@ void enc424j600_wait_for_dma()
 {
 	uint8_t i = 0;
 	//wait for previous DMA operation to complete
-	while( ( enc_read_ctrl_reg8_common( EECON1L ) & _BV(5) )  &&  (i++ < 250 ) ) standarddelay(); //This can wait up to 3.75mS
+	while( ( enc_read_ctrl_reg8_common( EECON1L ) & _BV(5) )  &&  (i++ < 250 ) ) {
+		standarddelay(); //This can wait up to 3.75mS
+	}
 }
 
 int8_t enc424j600_xmitpacket( uint16_t start, uint16_t len )
@@ -268,43 +240,14 @@ int8_t enc424j600_xmitpacket( uint16_t start, uint16_t len )
 		i++;
 		if( i > 250 )
 		{
+		// Error: XMIT Could not send.
 			//Consider clearing the packet in transmission, here.
 			//Done by clearing TXRTS
-#ifdef ETH_DEBUG
-			sendstr( "XMIT Could not send.\n" );
-#endif
 			return -1;
 		}
 		//_delay_us(1);
 		standarddelay();
 	}
-
-#ifdef ETH_DEBUG
-	int ret = enc424j600_read_ctrl_reg16( EETXSTATL );
-	if( ret & _BV(10 ) )
-	{
-		sendstr( "LCOL\n" );
-	}
-	if( ret & _BV(9 ) )
-	{
-		sendstr( "MAXCOL\n" );
-	}
-	if( ret & _BV(8 ) )
-	{
-		sendstr( "EXDEFER\n" );
-	}
-	if( ret & _BV(7 ) )
-	{
-		//XXX NOTE This happens even in full-duplex 100M mode.
-		//WHY?  SERIOUSLY DOES THIS DATASHEET HATE ME???
-		//XXX This is triggered very frequently.
-//		sendstr( "DEF2\n" );
-	}
-	if( ret & _BV(4 ) )
-	{
-		sendstr( "CRCBAD\n" );
-	}
-#endif
 
 	enc424j600_write_ctrl_reg16( EETXSTL, start );
 	enc424j600_write_ctrl_reg16( EETXLENL, len );
@@ -361,20 +304,10 @@ unsigned short enc424j600_recvpack()
 		return 0;
 	}
 
-//	Initially, I thought this may be the source of dropped incoming packets.
-//  This has nothing to do with dropped packets.
-//	Do we have much of a queue?
-//	if( estat > 5 )
-//	{
-//		sendstr( "STAT OVERRIDE\n" );
-//	}
-
-//	sendchr( '.' );
 	//Configure ERXDATA for reading.
 	enc424j600_write_ctrl_reg16( EERXRDPTL, NextPacketPointer );
 
 	//Start reading!!!
-
 	cs_low();
 	espiW( ERRXDATA );
 
@@ -383,17 +316,15 @@ unsigned short enc424j600_recvpack()
 	//Read the status vector
 	receivedbytecount = enc424j600_pop16LE();
 
-	if( enc424j600_pop16LE() & _BV( 7 ) )
-	{
-		enc424j600_pop16LE(); 
+	if (enc424j600_pop16LE() & _BV( 7 )) {
+		enc424j600_pop16LE();
 		//Good packet.
 
 		//Dest mac.
 		enc424j600_receivecallback( receivedbytecount );
-	} else
-	{
+	} else {
+		// ERROR: Bad packet
 		//I have never observed tis code getting called, even when I saw dropped packets.
-//		sendstr( "bad pack\n" );
 	}
 
 	if( !termcallbackearly )
@@ -408,31 +339,29 @@ unsigned short enc424j600_recvpack()
 //Start a checksum
 void enc424j600_start_checksum( uint16_t start, uint16_t len )
 {
-	uint8_t i = 0;
 	enc424j600_wait_for_dma();
-	enc424j600_write_ctrl_reg16( EEDMASTL, start + sendbaseaddress );
-	enc424j600_write_ctrl_reg16( EEDMALENL, len );
-	enc_oneshot( ESDMACKSUM );
+	enc424j600_write_ctrl_reg16(EEDMASTL, start + sendbaseaddress);
+	enc424j600_write_ctrl_reg16(EEDMALENL, len);
+	enc_oneshot(ESDMACKSUM);
 }
 
 //Get the results of a checksum
 uint16_t enc424j600_get_checksum()
 {
 	uint16_t ret;
-	uint8_t i = 0;
 	enc424j600_wait_for_dma();
-	ret = enc424j600_read_ctrl_reg16( EEDMACSL );
-	return (ret >> 8 ) | ( ( ret & 0xff ) << 8 );
+	ret = enc424j600_read_ctrl_reg16(EEDMACSL);
+	return (ret >> 8) | ((ret & 0xff) << 8);
 }
 
 //Modify a word of memory (based off of offset from start sending)
-void enc424j600_alter_word( uint16_t address, uint16_t val )
+void enc424j600_alter_word (uint16_t address, uint16_t val)
 {
 	enc424j600_write_ctrl_reg16( EEUDAWRPTL, address + sendbaseaddress );
 	cs_low();
-	espiW( EWUDADATA );
-	espiW( val >> 8 );
-	espiW( val & 0xFF );
+	espiW(EWUDADATA);
+	espiW((val >> 8) & 0xFF);
+	espiW(val & 0xFF);
 	cs_high();
 }
 
@@ -440,11 +369,11 @@ void enc424j600_alter_word( uint16_t address, uint16_t val )
 void enc424j600_copy_memory( uint16_t to, uint16_t from, uint16_t length, uint16_t range_start, uint16_t range_end )
 {
 	enc424j600_wait_for_dma();
-	enc424j600_write_ctrl_reg16( EEUDASTL, range_start ); 
-	enc424j600_write_ctrl_reg16( EEUDANDL, range_end ); 
+	enc424j600_write_ctrl_reg16(EEUDASTL, range_start);
+	enc424j600_write_ctrl_reg16(EEUDANDL, range_end);
 
-	enc424j600_write_ctrl_reg16( EEDMASTL, from );
-	enc424j600_write_ctrl_reg16( EEDMADSTL, to );
-	enc424j600_write_ctrl_reg16( EEDMALENL, length );
-	enc_oneshot( ESDMACOPY ); //XXX TODO: Should we be purposefully /not/ calculating checksum?  Does it even matter?
+	enc424j600_write_ctrl_reg16(EEDMASTL, from);
+	enc424j600_write_ctrl_reg16(EEDMADSTL, to);
+	enc424j600_write_ctrl_reg16(EEDMALENL, length);
+	enc_oneshot(ESDMACOPY); //XXX TODO: Should we be purposefully /not/ calculating checksum?  Does it even matter?
 }
