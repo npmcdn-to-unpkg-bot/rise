@@ -431,8 +431,9 @@ void DoPing( uint8_t pingslot )
 	uint16_t checksum = (seqnum + pingslot + 0x0800) ;
 
 	int8_t arpslot = RequestARP( ClientPingEntries[pingslot].ip );
-
-	if( arpslot < 0 ) return;
+	if (arpslot < 0) {
+		return;
+	}
 
 	//must set macfrom to be the IP address of the target.
 	memcpy( macfrom, ClientArpTable[arpslot].mac, 6 );
