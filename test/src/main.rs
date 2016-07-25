@@ -8,7 +8,7 @@ fn main() {
     let _ = inner();
 }
 
-const char_a: u8 = b'%';
+const char_a: u8 = b'9';
 const char_b: u8 = b'$';
 
 fn inner() -> io::Result<()> {
