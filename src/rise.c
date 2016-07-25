@@ -1,11 +1,10 @@
+#include "rise.h"
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
-#include "avr_print.h"
 #include <stdio.h>
-#include "iparpetc.h"
+#include "ip.h"
 #include "enc424j600.h"
-#include <util10.h>
 #include <avr/pgmspace.h>
 #include <string.h>
 
@@ -27,11 +26,11 @@ void DoPingCode()
 {
 	int8_t r;
 
-	sendchr( 0 );
-	sendhex4( ClientPingEntries[pingslot].last_recv_seqnum );
-	sendchr( '/' );
-	sendhex4( ClientPingEntries[pingslot].last_send_seqnum );
-	sendchr( '\n' );
+	// sendchr( 0 );
+	// sendhex4( ClientPingEntries[pingslot].last_recv_seqnum );
+	// sendchr( '/' );
+	// sendhex4( ClientPingEntries[pingslot].last_send_seqnum );
+	// sendchr( '\n' );
 
 	r = RequestARP( iptoping );
 
@@ -42,7 +41,7 @@ void DoPingCode()
 
 }
 
-char* packet = "[MOTD]\n";
+char* packet = "[MOT6]\n";
 
 void SendUDP (void)
 {
@@ -127,7 +126,7 @@ static int timer_tick(void)
 int main (void)
 {
 	cli();
-	setup_spi();
+	// setup_spi();
 	setup_clock();
 	timer_config();
 	SetupPing();

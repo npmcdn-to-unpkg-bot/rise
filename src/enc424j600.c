@@ -1,11 +1,11 @@
 //Copyright 2012 Charles Lohr under the MIT/x11, newBSD, LGPL or GPL licenses.  You choose.
 
+#include "rise.h"
 #include "enc424j600.h"
 #include "enc424j600_regs.h"
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/pgmspace.h>
-#include "avr_print.h"
 
 uint8_t termcallbackearly;
 uint16_t sendbaseaddress;
@@ -85,14 +85,38 @@ static void cs_high(void)
 	ETCSPORT |= ETCS;
 }
 
+static uint8_t do_spi = 0;
+static uint8_t spi_write = 0;
+
+static void spi_thread (void)
+{
+	if (do_spi != 0) {
+		espiW(spi_write);
+		do_spi = 0;
+	}
+}
+
+static void spi_queue_write (uint8_t value) {
+	do_spi = 1;
+	spi_write = value;
+}
+
 
 void enc424j600_write_ctrl_reg16( uint8_t addy, uint16_t value )
 {
-	cs_low();
-	espiW( EWCRU );
-	espiW( addy );
-	enc424j600_push16LE( value );
-	cs_high();
+	static uint8_t state = 0;
+
+	while (1) {
+		spi_thread();
+
+		switch (state++) {
+			case 0: cs_low(); break;
+			case 1: spi_queue_write(EWCRU); break;
+			case 2: spi_queue_write(addy); break;
+			case 3: enc424j600_push16LE( value ); break;
+			case 4: cs_high(); state = 0; return;
+		}
+	}
 }
 
 //This requires the proper bank to be selected.
@@ -142,8 +166,9 @@ int8_t enc424j600_init( const unsigned char * macaddy )
 
 	standarddelay();
 	enc424j600_write_ctrl_reg16( EEUDASTL, 0x1234 );
-	if( enc424j600_read_ctrl_reg16( EEUDASTL ) != 0x1234 )
+	if (enc424j600_read_ctrl_reg16( EEUDASTL ) != 0x1234) {
 		return -1;
+	}
 
 	//Instead of ECONing, we do it this way.
 	enc_oneshot( ESSETETHRST );

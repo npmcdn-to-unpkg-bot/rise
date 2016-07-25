@@ -3,15 +3,6 @@
 
 #include "eth_config.h"
 
-#ifdef MUTE_PRINTF
-#define sendchr( x )
-#define sendstr( x )
-#define sendhex1( x )
-#define sendhex2( x )
-#define sendhex4( x )
-#define setup_spi( x ) 
-#else
-
 void sendchr( char c );
 
 #define sendstr( s ) { unsigned char rcnt; \
@@ -21,8 +12,6 @@ void sendchr( char c );
 void sendhex1( unsigned char i );
 void sendhex2( unsigned char i );
 void sendhex4( unsigned int i );
-void setup_spi( void );
-#endif
+#define setup_spi( s )
 
 #endif
-

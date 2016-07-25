@@ -3,7 +3,7 @@
 #ifndef _enc424j600_H
 #define _enc424j600_H
 
-#include <eth_config.h>
+#include "rise.h"
 #include "enc424j600_regs.h"
 #include <avr/io.h>
 
@@ -108,4 +108,3 @@ extern uint16_t sendbaseaddress;
 
 #endif
 #endif
-

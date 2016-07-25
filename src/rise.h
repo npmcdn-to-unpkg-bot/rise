@@ -26,7 +26,7 @@
 #define ETINTP  8 //disabled.
 #define ETSOP   4
 #define ETSIP   3
-#define ETSCKP  2   
+#define ETSCKP  2
 
 
 #define ETCS	_BV(ETCSP)
@@ -42,10 +42,10 @@
 
 //It's the same size, faster, but not thread safe. Used in conjunction with ASM_SPI
 //NOTE: This does not work on the ATMega168 for some reason, even at lower speeds?
-//NOTE: This will not work at 28 MHz 
+//NOTE: This will not work at 28 MHz
 //#define ASM_REALLY_FAST_SPI
 
-//Minimum MTU every host must be able to handle; 
+//Minimum MTU every host must be able to handle;
 #define MAX_FRAMELEN     578
 
 //Do this to disable printf's and save space
@@ -99,7 +99,7 @@
 
 //Additional applications
 //#define INCLUDE_HTTP_SERVER
-#define HTTP_SERVER_TIMEOUT (10000) 
+#define HTTP_SERVER_TIMEOUT (10000)
 #define HTTP_CONNECTIONS 6
 
 
@@ -141,4 +141,3 @@ extern unsigned char MyMAC[6];
 #endif
 
 #endif
-

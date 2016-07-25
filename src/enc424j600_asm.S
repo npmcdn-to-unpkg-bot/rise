@@ -155,7 +155,7 @@ espiR_asm:
 
 	ret
 #else
-	clr r24              // 1 cycle 
+	clr r24              // 1 cycle
 	cbi ETPORT, ETSCKP   // 2 cycles
 	sbi ETPORT, ETSCKP   // 2 cycles
 	sbic ETPIN, ETSOP    // 1 cycle
@@ -306,7 +306,7 @@ espiW_asm:
 //Hardware SPI.
 
 
-#if ETH_HARDWARE_UART == 0 
+#if ETH_HARDWARE_UART == 0
 #define LUCS UCSR0A
 #define LUDRE UDRE0
 #define LURXC RXC0
@@ -351,7 +351,7 @@ elopbr:
 
 	lds r24, LUDR
 
-	ret	
+	ret
 
 
 
@@ -363,7 +363,7 @@ espiFASTRSetup:
 
 	ori r24, 0xff
 	sts LUDR, r24
-	ret	
+	ret
 
 
 .global espiFASTR
@@ -400,6 +400,3 @@ espiEndFASTR:
 
 
 #endif
-
-
-

@@ -1,11 +1,11 @@
 //Copyright 2012 Charles Lohr under the MIT/x11, newBSD, LGPL or GPL licenses.  You choose.
 
+#include "rise.h"
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
-#include "avr_print.h"
 #include <stdio.h>
-#include "iparpetc.h"
+#include "ip.h"
 #include "enc424j600.h"
 #include <alloca.h>
 #include <string.h>
@@ -21,7 +21,6 @@ unsigned short localport;
 static unsigned short iptotallen;
 
 #define SIZEOFICMP 28
-
 
 uint16_t NetGetScratch()
 {
@@ -125,7 +124,7 @@ static void HandleICMP()
 			payload_dest_start = enc424j600_read_ctrl_reg16( EEGPWRPTL );
 
 			//+4 = id + seqnum (we're DMAing that, too)
-			enc424j600_copy_memory( payload_dest_start, payload_from_start, payloadsize + 4, RX_BUFFER_START, RX_BUFFER_END-1 );  
+			enc424j600_copy_memory( payload_dest_start, payload_from_start, payloadsize + 4, RX_BUFFER_START, RX_BUFFER_END-1 );
 			enc424j600_write_ctrl_reg16( EEGPWRPTL, payload_dest_start + payloadsize + 4 );
 
 			enc424j600_finish_callback_now();
@@ -347,7 +346,7 @@ void util_finish_udp_packet( )// unsigned short length )
 	//Addenudm for UDP checksum
 
 	enc424j600_alter_word( 34+6, 0x11 + 0x8 + length-42 ); //UDP number + size + length (of packet)
-		//XXX I THINK 
+		//XXX I THINK
 
 	enc424j600_start_checksum( 20+6, length - 42 + 16 ); //sta
 
