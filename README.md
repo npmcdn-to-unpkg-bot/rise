@@ -8,7 +8,7 @@ Keep sending messages until you get a response.
 
 Then you are GOLDEN
 
-## Insturctions
+## Instructions
 
 ```
 brew tap osx-cross/avr
@@ -17,7 +17,13 @@ brew install avr-libc
 
 ## TODO
 
-* Merge all relevant C code into one or several well-named files
-* Contain AVR related code to another dedicated files
-* pycparser should be able to parse result
-* convert it to verilog iteratively
+* Start SPI module in verilog code
+* Write test for it
+* Verify against a Tessel
+* Add pmod output pins
+* Get it to talk to enc424 pmodule
+* Build up code + testbenches
+
+## Credits
+
+<https://github.com/cnlohr/avrcraft.git> for original enc424 driver code
