@@ -1,18 +1,13 @@
 #include "rise.h"
-#include <avr/io.h>
-#include <avr/interrupt.h>
-#include <util/delay.h>
+#include "avrlib.h"
+#include <stdint.h>
 #include <stdio.h>
 #include "ip.h"
 #include "enc424j600.h"
-#include <avr/pgmspace.h>
-#include <string.h>
 
-#define NOOP asm volatile("nop" ::)
-
-unsigned char MyIP[4] = { 169, 254, 0, 144 };
-unsigned char MyMask[4] = { 255, 255, 255, 0 };
-unsigned char MyMAC[6];
+uint8_t MyIP[4] = { 169, 254, 0, 144 };
+uint8_t MyMask[4] = { 255, 255, 255, 0 };
+uint8_t MyMAC[6];
 
 int8_t pingslot;
 uint8_t iptoping[4] = { 169, 254, 0, 143 };
@@ -41,11 +36,11 @@ void DoPingCode()
 
 }
 
-char* packet = "[MOT6]\n";
+int8_t* packet = "[MOT0]\n";
 
 void SendUDP (void)
 {
-	const char * sending;
+	const int8_t* sending;
 
 	enc424j600_stopop();
 	enc424j600_startsend( 0 );
@@ -98,12 +93,12 @@ static void timer_config (void)
 	TCCR2A = _BV(WGM21) | _BV(WGM20);
 	TCCR2B = _BV(WGM22) | _BV(CS22) | _BV(CS21) | _BV(CS20);
 	//T2 operates on clkIO, fast PWM.  Fast PWM's TOP is OCR2A
-	#define T2CNT  ((F_CPU/1024)/100)
-	#if( T2CNT > 254 )
-	#undef T2CNT
-	#define T2CNT 254
-	#endif
-	OCR2A = T2CNT;
+	//#define T2CNT  ((F_CPU/1024)/100)
+	//#if( T2CNT > 254 )
+	//#undef T2CNT
+	//#define T2CNT 254
+	//#endif
+	OCR2A = F_CPU/1024/100;
 }
 
 static int timer_tick(void)
@@ -123,14 +118,14 @@ static int timer_tick(void)
 	return 0;
 }
 
-int main (void)
+int32_t main (void)
 {
-	cli();
+	sys_disable_interrupts();
 	// setup_spi();
 	setup_clock();
 	timer_config();
 	SetupPing();
-	sei();
+	sys_enable_interrupts();
 
 	if (enc424j600_init(MyMAC)) {
 		// Failure

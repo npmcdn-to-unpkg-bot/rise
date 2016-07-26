@@ -1,18 +1,16 @@
 //Copyright 2012 Charles Lohr under the MIT/x11, newBSD, LGPL or GPL licenses.  You choose.
 
 #include "rise.h"
+#include "avrlib.h"
 #include "enc424j600.h"
 #include "enc424j600_regs.h"
-#include <avr/io.h>
-#include <util/delay.h>
-#include <avr/pgmspace.h>
 
 uint8_t termcallbackearly;
 uint16_t sendbaseaddress;
 
 static void standarddelay()
 {
-	_delay_us(15);
+	sys_delay_us(15);
 }
 
 // big endian

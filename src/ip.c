@@ -1,15 +1,10 @@
 //Copyright 2012 Charles Lohr under the MIT/x11, newBSD, LGPL or GPL licenses.  You choose.
 
 #include "rise.h"
-#include <avr/io.h>
-#include <avr/interrupt.h>
-#include <util/delay.h>
 #include <stdio.h>
 #include "ip.h"
 #include "enc424j600.h"
-#include <alloca.h>
 #include <string.h>
-#include <avr/pgmspace.h>
 
 unsigned long icmp_in = 0;
 unsigned long icmp_out = 0;

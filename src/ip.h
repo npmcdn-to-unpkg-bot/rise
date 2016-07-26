@@ -4,9 +4,6 @@
 #define _IPARPETC_H
 
 #include <stdint.h>
-#ifdef INCLUDE_TCP
-#include "tcp.h"
-#endif
 
 #define IP_HEADER_LENGTH 20
 

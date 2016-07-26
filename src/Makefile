@@ -3,6 +3,7 @@ CC = avr-gcc
 
 SRCS = rise.c  \
 	enc424j600.c \
+	avrlib.c \
 	ip.c \
 	enc424j600_asm.S \
 
