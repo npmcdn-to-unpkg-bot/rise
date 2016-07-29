@@ -4,3 +4,4 @@
 *.map
 etc
 pycparser
+.DS_Store

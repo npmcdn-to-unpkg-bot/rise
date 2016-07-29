@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<body>
+  <hr>
+</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-mousewheel/3.1.13/jquery.mousewheel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/3.0.11/pixi.min.js"></script>
+<script>
+var renderer = PIXI.autoDetectRenderer(800, 600, { antialias: true });
+document.body.appendChild(renderer.view);
+
+// create the root of the scene graph
+var stage = new PIXI.Container();
+
+stage.interactive = true;
+
+var graphics = new PIXI.Graphics();
+
+// graphics.beginFill(0x333333);
+// graphics.drawRect(0, 50-2, 500, 50+4);
+// graphics.endFill();
+
+var points = [
+  [0, 0],
+];
+
+var last = 0;
+for (var j = 1000; j < 5000; j += 50) {
+  if (Math.random() > 0.5) {
+    points.push([j, points[points.length-1][1] == 1 ? 0 : 1]);
+  }
+}
+
+points.push([5000, 0])
+
+var minZoom = 800/points[points.length-1][0];
+var zoom = minZoom;
+var start = 0;
+var point = 0;
+
+graphics.interactive = true;
+var global_pos = null;
+graphics.on('mousemove', function (e) {
+  var p = e.data.getLocalPosition(this);
+  if (p.x >= 0 && p.x < this.width && p.y >= 0 && p.y < this.height) {
+    global_pos = p;
+  }
+})
+
+function redraw(xmul) {
+  var g = graphics;
+  g.clear();
+
+  g.beginFill(0xff0000);
+  var s = point;
+  g.moveTo(s - 4, 25 - 4);
+  g.lineTo(s - 4, 25 + 4);
+  g.lineTo(s + 4, 25 + 4);
+  g.lineTo(s + 4, 25 - 4);
+  g.lineTo(s - 4, 25 - 4);
+  g.endFill();
+
+  g.beginFill(0xffd900);
+
+  if (xmul < minZoom) {
+    xmul = minZoom;
+  }
+
+  var len = 2, h = 50 - len, y = 0;
+
+  for (var i = 0; i < points.length; i++) {
+    var change = false;
+    var x = (points[i][0] - start/2) * xmul;
+    if (i > 0) {
+      var xprev = (points[i-1][0] - start/2) * xmul;
+      var dest = y + ((h - len) * (1-points[i-1][1]));
+      g.moveTo(xprev, dest);
+      g.lineTo(xprev, dest + len);
+      g.lineTo(x+len, dest + len);
+      g.lineTo(x+len, dest);
+      g.lineTo(xprev, dest);
+      change = xprev != x;
+    }
+
+    if (change) {
+      g.moveTo(x, y);
+      g.lineTo(x, y+h);
+      g.lineTo(x+len, y+h);
+      g.lineTo(x+len, y);
+      g.lineTo(x, y);
+    }
+  }
+
+  graphics.endFill();
+}
+
+stage.addChild(graphics);
+
+// run the render loop
+animate();
+
+var a = 0;
+
+$(document).on('keydown', function (e) {
+  if (!global_pos) {
+    return;
+  }
+  console.log('E', e);
+  e.deltaY = (e.keyCode == 65 ? -1 : 1);
+  if (e.keyCode != 65 && e.keyCode != 83) {
+    return;
+  }
+  var lastZoom = zoom;
+  var less = e.deltaY < 0 ? 0 : 1;
+  var delta = Math.min(Math.log(Math.abs(e.deltaY), 10) + 1.5, 4);
+  // console.log(less, delta);
+  // console.log('current', zoom);
+  if (delta > 0 && delta < 5) {
+    if (!less) {
+      zoom = Math.max(minZoom, zoom * delta);
+    } else {
+      zoom = Math.max(minZoom, zoom * 1/delta);
+    }
+  }
+  zoom = Math.min(zoom, 400*1000);
+  // start *= delta;
+  point = global_pos.x;
+  if (e.keyCode == 65) {
+    start += (global_pos.x / zoom);
+  } else if (e.keyCode == 83) {
+    start -= (global_pos.x / lastZoom);
+    if (start < 0) {
+      start = 0;
+    }
+  }
+  console.log('zoom', start, global_pos.x);
+})
+
+function animate() {
+  // stage.scale.x = Math.abs(Math.cos(a += .02));
+    redraw(zoom);
+    renderer.render(stage);
+    requestAnimationFrame( animate );
+}
+</script>

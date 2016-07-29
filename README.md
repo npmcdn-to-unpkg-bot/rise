@@ -26,4 +26,10 @@ brew install avr-libc
 
 ## Credits
 
+<https://github.com/cfelton/rhea> for SPI driver ideas
+
 <https://github.com/cnlohr/avrcraft.git> for original enc424 driver code
+
+## License
+
+MIT
