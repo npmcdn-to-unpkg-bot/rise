@@ -5,3 +5,4 @@ authors = ["Tim Ryan <id@timryan.org>"]
 
 [dependencies]
 vcd = { git = "https://github.com/tcr/rust-vcd.git" }
+rustc-serialize = "0.3"
