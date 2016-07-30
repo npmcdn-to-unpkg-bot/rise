@@ -1,8 +1,15 @@
 [package]
-name = "viz"
+name = "rise-view"
 version = "0.1.0"
 authors = ["Tim Ryan <id@timryan.org>"]
 
 [dependencies]
 vcd = { git = "https://github.com/tcr/rust-vcd.git" }
 rustc-serialize = "0.3"
+iron = "0.4"
+mount = "0.2"
+staticfile = "0.3.0"
+router = "0.2.0"
+
+[[bin]]
+name = "rise-view"

@@ -1,16 +1,53 @@
 extern crate vcd;
 extern crate rustc_serialize;
+extern crate iron;
+extern crate staticfile;
+extern crate mount;
+extern crate router;
+
+
+use std::path::Path;
+
+use mount::Mount;
+use std::env;
 
 use rustc_serialize::json;
 use std::io;
 use std::io::prelude::*;
 use std::fs::File;
 use std::collections::HashMap;
+//use iron::{Iron, Request, Response, IronResult, Handler};
+use iron::prelude::*;
+use iron::headers::ContentType;
+use iron::modifiers::Header;
+use iron::status;
+use router::Router;
 
 use vcd::{ScopeItem, IdCode, Command, Value};
 
+fn serve() {
+    let mut mount = Mount::new();
+
+    fn root(_: &mut Request) -> IronResult<Response> {
+        Ok(Response::with((status::Ok, Header(ContentType::html()), &include_bytes!("index.html")[..])))
+    }
+
+    let mut router = Router::new();  // Alternative syntax:
+    router.get("/", root);
+    router.get("/vcd", handler_vcd);
+
+    // Serve the shared JS/CSS at /
+    mount.mount("/", router);
+
+    println!("Server running on http://localhost:3000/");
+
+    Iron::new(mount).http("127.0.0.1:3000").unwrap();
+}
+
+
 fn main() {
-    ok().expect("Error");
+    //ok().expect("Error");
+    serve();
 }
 
 #[derive(Debug, Clone, RustcDecodable, RustcEncodable)]
@@ -19,8 +56,14 @@ struct Signal {
     points: Vec<(u64, u8)>,
 }
 
-fn ok() -> io::Result<()> {
-    let mut f = try!(File::open("tb.vcd"));
+#[derive(Debug, Clone, RustcDecodable, RustcEncodable)]
+struct VcdDump {
+    duration: u64,
+    signals: Vec<Signal>,
+}
+
+fn handler_vcd(_: &mut Request) -> IronResult<Response> {
+    let mut f = File::open(env::args().nth(1).unwrap()).unwrap();
 
     let mut reader = vcd::Parser::new(&mut f);
 
@@ -72,10 +115,16 @@ fn ok() -> io::Result<()> {
         }
     }
 
-    let signals: Vec<Signal> = vars.into_iter().map(|(_, v)| v).collect();
+    let mut signals: Vec<Signal> = vars.into_iter()
+        .map(|(_, v)| v)
+        .collect();
 
-    println!("var signals = {};", json::encode(&signals).unwrap());
-    println!("var pointWidth = {};", timestamp + 20);
+    signals.sort_by_key(|x| x.name.to_owned());
 
-    Ok(())
+    let res = json::encode(&VcdDump {
+        duration: timestamp + 20,
+        signals: signals,
+    }).unwrap();
+
+    Ok(Response::with((status::Ok, Header(ContentType::json()), res.as_bytes())))
 }
