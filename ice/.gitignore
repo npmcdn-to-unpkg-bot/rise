@@ -3,3 +3,4 @@
 *.ex
 *.txt
 *.bin
+*.vcd*
