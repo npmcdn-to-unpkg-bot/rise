@@ -23,7 +23,7 @@ use iron::modifiers::Header;
 use iron::status;
 use router::Router;
 
-use vcd::{ScopeItem, IdCode, Command, Value};
+use vcd::{ScopeItem, Scope, IdCode, Command, Value};
 
 fn serve() {
     let mut mount = Mount::new();
@@ -70,18 +70,25 @@ fn handler_vcd(_: &mut Request) -> IronResult<Response> {
     let mut vars = HashMap::new();
 
     let header = reader.parse_header().unwrap();
-    for item in &header.scope.children {
-        match item {
-            &ScopeItem::Var(ref item) => {
-                vars.insert(item.code, Signal {
-                    name: item.reference.to_string(),
-                    points: vec![],
-                });
-                //println!("var {:?}", item);
-            },
-            _ => {}
+
+    fn scoper(vars: &mut HashMap<IdCode, Signal>, scope: &Scope) {
+        for item in &scope.children {
+            match item {
+                &ScopeItem::Var(ref item) => {
+                    vars.insert(item.code, Signal {
+                        name: item.reference.to_string(),
+                        points: vec![],
+                    });
+                    //println!("var {:?}", item);
+                },
+                &ScopeItem::Scope(ref scope) => {
+                    scoper(vars, scope);
+                }
+            }
         }
-    }
+    };
+
+    scoper(&mut vars, &header.scope);
 
     let mut timestamp = 0;
     for cmd in reader {
@@ -96,6 +103,12 @@ fn handler_vcd(_: &mut Request) -> IronResult<Response> {
                         Value::V0 | _ => 0,
                     }))
                 }
+            }
+            Ok(Command::ChangeVector(id, value)) => {
+                // TODO
+            }
+            Ok(Command::ChangeString(id, value)) => {
+                // TODO
             }
             what=> {
                 println!("line {:?}", what);
